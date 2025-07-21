@@ -1,25 +1,38 @@
 package main
 
+//TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
+// the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
 import (
+	"OcrClient/config"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/segmentio/kafka-go"
 	"log"
+	"path/filepath"
+	"runtime"
 )
 
-//TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
-// the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
-
 func main() {
+	_, b, _, _ := runtime.Caller(0)
+	basePath := filepath.Dir(b)
+	configPath := filepath.Join(basePath, "..", "config", "kafka_config.yml")
+	fmt.Println(b, basePath, configPath)
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	spew.Printf("%v\n\n", cfg)
+
 	// to produce messages
 	w := &kafka.Writer{
-		Addr:     kafka.TCP("localhost:9092", "localhost:9093", "localhost:9094"),
-		Topic:    "image-recognition-requests",
-		Balancer: &kafka.LeastBytes{},
+		Addr:  kafka.TCP(cfg.Kafka.Brokers...),
+		Topic: cfg.Kafka.Writer.Topic,
 	}
 
-	err := w.WriteMessages(context.Background(),
+	err = w.WriteMessages(context.Background(),
 		kafka.Message{
 			Value: []byte(`{"file_url":"https://672421063581-images-for-ocr.s3.us-east-1.amazonaws.com/img.png"}`),
 		},
@@ -36,9 +49,9 @@ func main() {
 
 	// make a new reader that consumes from topic-A, partition 0, at offset 42
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-		Topic:   "image-recognition-responses",
-		GroupID: "image-recognition-responses-group",
+		Brokers: cfg.Kafka.Brokers,
+		Topic:   cfg.Kafka.Reader.Topic,
+		GroupID: cfg.Kafka.Reader.GroupID,
 	})
 
 	for {
